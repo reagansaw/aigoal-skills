@@ -17,7 +17,7 @@ AIGOAL 学员用的 Claude skills。装好之后，在 Claude 里打 `/` 选，�
 在 Claude Code 里打这两行：
 
 ```
-/plugin marketplace add 【GitHub 帐号】/aigoal-skills
+/plugin marketplace add reagansaw/aigoal-skills
 /plugin install aigoal-skills@aigoal-skills
 ```
 
