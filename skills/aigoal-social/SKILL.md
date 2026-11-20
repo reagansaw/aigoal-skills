@@ -26,13 +26,14 @@ CTA 要接得上用户的 lead magnet 或落地页（aigoal-landing 做的那一
 
 ## 0. 开工前，先确认 3 样
 
-1. **钥匙**：请用户到 app.aigoal.ai →「整合中心」→「API 钥匙」→ 复制整段，贴给你。
-   - 放进环境变量跑脚本：`AIGOAL_TOKEN='<钥匙>' python3 …`，或写进 scratchpad 的一个暂存档用 `--token-file`。**不要写进 skill、README、posts.json、git，也不要印出来。**
-   - 大约 1 小时过期。脚本回「钥匙过期」，就请用户回整合中心按「换一把新的」。
+1. **钥匙**：请用户到 app.aigoal.ai →「整合中心」→「API 钥匙」→ 复制**整段**，贴给你。整段长这样：`BASE=…`、`TOKEN=…`、`TENANT=…` 几行。
+   - 把整段原样存进 scratchpad 的一个暂存档（例如 `key.txt`），跑脚本时用 `--token-file key.txt`。脚本会自己读 TOKEN 和 TENANT，两个都带（TENANT 没带会打到别的户口或被拒）。
+   - **不要写进 skill、README、posts.json、git，也不要印出来。**
+   - 大约 1 小时过期。脚本回「钥匙过期」，就请用户回整合中心按「换一把新的」，再贴一次整段。
    - 不要自己去电脑里翻钥匙，只用用户贴给你的。
 2. **专页连好了没有**：跑 `pages`。
    ```bash
-   AIGOAL_TOKEN='…' python3 "<skill>/scripts/aigoal_social.py" pages
+   python3 "<skill>/scripts/aigoal_social.py" --token-file key.txt pages
    ```
    - 没有专页 → 请用户到「整合中心 → Facebook & Instagram」连 FB 专页。IG 要是专业账号，而且接在那个 FB 专页下面。
    - 显示「要重连」→ 以前连过、但没有发帖权限：请用户重连一次，授权页上「管理贴文 / 发布内容」要打勾。
@@ -62,7 +63,7 @@ CTA 要接得上用户的 lead magnet 或落地页（aigoal-landing 做的那一
 本机的影片和照片要先变成公开网址：
 
 ```bash
-AIGOAL_TOKEN='…' python3 "<skill>/scripts/aigoal_social.py" upload "成片/第1支.mp4" "成片/第2支.mp4"
+python3 "<skill>/scripts/aigoal_social.py" --token-file key.txt upload "成片/第1支.mp4" "成片/第2支.mp4"
 ```
 
 - 影片 MP4 / MOV，最大 300MB，会自动分块上传，断线会从断的地方接。
@@ -85,7 +86,7 @@ AIGOAL_TOKEN='…' python3 "<skill>/scripts/aigoal_social.py" upload "成片/第
 
 ```bash
 python3 "<skill>/scripts/aigoal_social.py" check posts.json          # 本机检查，不连网
-AIGOAL_TOKEN='…' python3 "<skill>/scripts/aigoal_social.py" send posts.json
+python3 "<skill>/scripts/aigoal_social.py" --token-file key.txt send posts.json
 ```
 
 栏位规矩（系统会照这些挡，写错整批都不排）：
@@ -115,10 +116,10 @@ AIGOAL_TOKEN='…' python3 "<skill>/scripts/aigoal_social.py" send posts.json
 管理：
 
 ```bash
-AIGOAL_TOKEN='…' python3 "<skill>/scripts/aigoal_social.py" list --status pending      # 还没发的
-AIGOAL_TOKEN='…' python3 "<skill>/scripts/aigoal_social.py" list --status failed       # 没发出去的和原因
-AIGOAL_TOKEN='…' python3 "<skill>/scripts/aigoal_social.py" cancel --group <group_id>   # 同一次排的 FB + IG 一起取消
-AIGOAL_TOKEN='…' python3 "<skill>/scripts/aigoal_social.py" stats --ids id1,id2         # 已发的：观看、赞、留言、分享
+python3 "<skill>/scripts/aigoal_social.py" --token-file key.txt list --status pending      # 还没发的
+python3 "<skill>/scripts/aigoal_social.py" --token-file key.txt list --status failed       # 没发出去的和原因
+python3 "<skill>/scripts/aigoal_social.py" --token-file key.txt cancel --group <group_id>   # 同一次排的 FB + IG 一起取消
+python3 "<skill>/scripts/aigoal_social.py" --token-file key.txt stats --ids id1,id2         # 已发的：观看、赞、留言、分享
 ```
 
 改 caption / 时间、同一帖多排几天，叫用户在 Social Media 页面点那一帖改，最直接；要用 API 改，接口是 `POST /api/social/schedule/update`（`id` + `caption` / `publish_at`）和 `POST /api/social/schedule/copy`（`id` 或 `group_id` + `times`），改之前一样先讲给用户听。
@@ -136,7 +137,7 @@ AIGOAL_TOKEN='…' python3 "<skill>/scripts/aigoal_social.py" stats --ids id1,id
     "pub_hit_tpl": "PM 你了 ✅ check inbox 哦"}
    ```
    ```bash
-   AIGOAL_TOKEN='…' python3 "<skill>/scripts/aigoal_social.py" comments-set cfg.json
+   python3 "<skill>/scripts/aigoal_social.py" --token-file key.txt comments-set cfg.json
    ```
 3. **每一帖要个别打开**：帖子发出去之后，用 `{"post_id": "<那一帖的 post_id>", "post_on": true}` 再送一次（post_id 在 `list` 已发那一帖里），或叫用户在 Social Media 页面把那一帖打开。
 

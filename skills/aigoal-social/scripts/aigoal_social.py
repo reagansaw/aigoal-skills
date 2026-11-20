@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """用 app.aigoal.ai 的 social API 排程发片到 FB 专页 / Instagram / TikTok。
 
-用法（钥匙放环境变量 AIGOAL_TOKEN，或 --token-file 指一个只放钥匙的暂存档）:
+用法（钥匙：把「整合中心 → API 钥匙」复制来的整段存进暂存档，用 --token-file 指过去；
+      或设环境变量 AIGOAL_TOKEN（+ AIGOAL_TENANT）。放在子命令前面：aigoal_social.py --token-file key.txt pages）:
     python3 aigoal_social.py pages                       # 连了哪些专页、能不能发、IG 今天还剩几帖
     python3 aigoal_social.py upload 第1支.mp4 封面.jpg     # 上传本机影片 / 照片 → 印出公开网址
     python3 aigoal_social.py check posts.json            # 只在本机检查，不连网、不发
@@ -40,23 +41,35 @@ VIDEO_MAX = 300 * 1024 * 1024
 IMAGE_MAX = 16 * 1024 * 1024
 
 
-def token(args):
-    t = ""
+def creds(args):
+    """钥匙：整段从「整合中心 → API 钥匙」复制来的（TOKEN= / TENANT= 那几行），或只有钥匙本身。
+    来源：--token-file 暂存档，或环境变量 AIGOAL_TOKEN（+ AIGOAL_TENANT）。"""
+    text = ""
     if getattr(args, "token_file", None):
-        t = open(os.path.expanduser(args.token_file), encoding="utf-8").read()
-    t = (t or os.environ.get("AIGOAL_TOKEN") or os.environ.get("AIGOAL_API_KEY") or "").strip()
-    m = re.search(r"Bearer\s+(\S+)", t)  # 整段从「整合中心 → API 钥匙」复制来的也认
-    t = m.group(1) if m else t.split()[-1] if t else ""
+        text = open(os.path.expanduser(args.token_file), encoding="utf-8").read()
+    text = text or os.environ.get("AIGOAL_TOKEN") or os.environ.get("AIGOAL_API_KEY") or ""
+    tok = re.search(r"^\s*TOKEN\s*=\s*(\S+)", text, re.M)
+    ten = re.search(r"^\s*TENANT\s*=\s*([0-9A-Za-z_-]+)", text, re.M)
+    if tok:
+        t = tok.group(1)
+    else:
+        m = re.search(r"Bearer\s+([A-Za-z0-9._-]{20,})", text)  # 只有「Authorization: Bearer xxx」一行也认
+        words = [w for w in text.split() if not w.startswith(("#", "$"))]
+        t = m.group(1) if m else (words[-1] if words else "")
+    tenant = (ten.group(1) if ten else os.environ.get("AIGOAL_TENANT", "")).strip()
     if not t:
-        sys.exit("没有钥匙。请用户到 app.aigoal.ai →「整合中心」→「API 钥匙」→ 复制，贴给你；"
-                 "你放进环境变量 AIGOAL_TOKEN（或 --token-file 暂存档），不要写进任何档案。")
-    return t
+        sys.exit("没有钥匙。请用户到 app.aigoal.ai →「整合中心」→「API 钥匙」→ 复制整段，贴给你；"
+                 "你把整段存进 scratchpad 的暂存档、用 --token-file 指过去，不要写进任何别的档案。")
+    return t, tenant
 
 
 def call(args, method, path, body=None, raw=None, ctype="application/json"):
     data = raw if raw is not None else (json.dumps(body, ensure_ascii=False).encode() if body is not None else None)
     req = urllib.request.Request(BASE + path, data=data, method=method)
-    req.add_header("Authorization", "Bearer " + token(args))
+    tok, tenant = creds(args)
+    req.add_header("Authorization", "Bearer " + tok)
+    if tenant:  # 钥匙那段写了 TENANT 就一定要带，不然会打到别的户口或被拒
+        req.add_header("x-impersonate-tenant", tenant)
     if data is not None:
         req.add_header("Content-Type", ctype)
     try:
@@ -278,7 +291,10 @@ def cmd_list(args):
     st, j = call(args, "GET", "/api/social/schedule" + ("?" + urllib.parse.urlencode(q) if q else ""))
     if st >= 400:
         show(st, j)
-    for r in j.get("posts") or j.get("rows") or []:
+    rows = j.get("posts") or j.get("rows") or []
+    if not rows:
+        print("没有排程" + (f"（status={args.status}）" if args.status else "") + "。")
+    for r in rows:
         print(f"- {r.get('publish_at')}  {r.get('platform'):<9}  {r.get('status'):<10}  id={r.get('id')}  "
               f"{str(r.get('caption') or '')[:40].replace(chr(10), ' ')}"
               + (f"  ✗ {r.get('message') or r.get('error')}" if r.get("status") in ("failed", "unknown") else "")
@@ -312,7 +328,7 @@ def cmd_comments_set(args):
 
 def main():
     ap = argparse.ArgumentParser(description="app.aigoal.ai social API：排程发片")
-    ap.add_argument("--token-file", help="只放钥匙的暂存档（不给就读环境变量 AIGOAL_TOKEN）")
+    ap.add_argument("--token-file", help="存着「整合中心 → API 钥匙」那整段的暂存档（不给就读环境变量 AIGOAL_TOKEN / AIGOAL_TENANT）")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("pages")
     u = sub.add_parser("upload"); u.add_argument("files", nargs="+")
