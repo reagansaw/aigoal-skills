@@ -70,8 +70,12 @@ def clips_from_canvas(plan, dest):
     os.makedirs(dest, exist_ok=True)
     found = {}
     for s in plan["segments"]:
-        c = by_id.get(f"seg{s['n']}_vid") or {}
-        urls = c.get("resultUrls") or ([c["resultUrl"]] if c.get("resultUrl") else [])
+        urls = []
+        for nid in (f"seg{s['n']}_edit", f"seg{s['n']}_vid"):  # 加过字卡的用加了字卡的那一版
+            c = by_id.get(nid) or {}
+            urls = c.get("resultUrls") or ([c["resultUrl"]] if c.get("resultUrl") else [])
+            if urls:
+                break
         if not urls:
             print(f"  第 {s['n']} 段：画布上还没有出片，先跳过")
             continue

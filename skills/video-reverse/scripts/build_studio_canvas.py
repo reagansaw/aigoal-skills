@@ -18,6 +18,8 @@
     「- **图D**（输入：图L）：「…」」 — 拿别的图当输入来生成 (图生图)，提示里用 @image1、@image2 照输入的顺序叫它们
     素材名称写「角色卡」或「（横）」出 16:9，「（竖）」出 9:16，「（3:4）」这类照写；其余跟影片同画幅
     「### 第 N 段 · … · 生成 N 秒 · …」+「接图：@image1 = 图A…」+「接声音：@audio1 = 声A」(可选) + 下面第一个代码块  — 每一段的影片节点
+    「字卡（Video Edit）：」下一个代码块 (可选)  — 那一段出片后再接一个 studio Video Edit 格，照这段文字把字卡加进画面
+    开头写一行「型号：Seedance 2.5」就用 2.5 (一段 4–30 秒)；没写用 Seedance 2.0 (4–15 秒)
 """
 import json
 import mimetypes
@@ -29,7 +31,11 @@ import urllib.error
 import urllib.request
 
 API = "https://lqcgpujpfdnrxtpuvyfq.supabase.co/functions/v1/aigoal-api"
-VIDEO_MODEL = "seedance-2.0-custom"
+MODELS = {  # 型号: (studio 的 model id, 一段最长秒数, 档位)
+    "2.0": ("seedance-2.0-custom", 15, "fast"),
+    "2.5": ("seedance-2.5", 30, "flash"),
+}
+EDIT_MODEL = "seedance-2.0-video-edit"
 IMAGE_MODEL = "gpt-image-2"
 # 重搭时保留已跑出的结果；其余设定（提示、模式、接口数）用新的
 RESULT_FIELDS = ("status", "resultUrl", "resultUrls", "selectedResultIndex", "historyId", "runHistory", "resultText")
@@ -84,6 +90,7 @@ def parse(md_path):
         refs = re.findall(r"@image(\d+)\s*=\s*(图[A-Z])", body.split("```")[0])
         arefs = re.findall(r"@audio(\d+)\s*=\s*(声[A-Z])", body.split("```")[0])
         first_frame = "首帧模式" in head
+        edit = re.search(r"字卡（Video Edit）[^\n]*\n+```[^\n]*\n(.*?)```", body, re.S)
         segs.append({
             "n": n, "head": head,
             "duration": int(dur.group(1)) if dur else 10,
@@ -91,11 +98,14 @@ def parse(md_path):
             "refs": [(int(i), k) for i, k in refs],
             "arefs": [(int(i), k) for i, k in arefs],
             "first_frame": first_frame,
+            "edit": edit.group(1).strip() if edit else "",
         })
+    mv = re.search(r"^型号[：:].*?(2\.5|2\.0)", text, re.M)
     return {
         "title": title.group(1).strip() if title else os.path.basename(md_path),
         "ratio": ratio.group(1) if ratio else "9:16",
         "assets": assets, "segments": segs, "base": base,
+        "model": MODELS[mv.group(1) if mv else "2.0"], "model_name": "Seedance " + (mv.group(1) if mv else "2.0"),
     }
 
 
@@ -106,8 +116,10 @@ def check(plan):
             problems.append(f"第 {s['n']} 段没有找到提示词代码块")
         if len(s["prompt"]) > 1900:
             problems.append(f"第 {s['n']} 段提示词 {len(s['prompt'])} 个字符，超过 1900（上限约 2000），请删短")
-        if not 4 <= s["duration"] <= 15:
-            problems.append(f"第 {s['n']} 段 {s['duration']} 秒，Seedance 2.0 只能 4–15 秒")
+        if not 4 <= s["duration"] <= plan["model"][1]:
+            problems.append(f"第 {s['n']} 段 {s['duration']} 秒，{plan['model_name']} 只能 4–{plan['model'][1]} 秒")
+        if s["edit"] and s["duration"] > 15:
+            problems.append(f"第 {s['n']} 段要接 Video Edit，但 {s['duration']} 秒超过 Video Edit 的 15 秒上限")
         nums = sorted(i for i, _ in s["refs"])
         if nums != list(range(1, len(nums) + 1)):
             problems.append(f"第 {s['n']} 段的 @image 编号没有从 1 连着排: {nums}")
@@ -189,8 +201,9 @@ NOTE = """{title}
 
 怎么跑（每个都由你自己按 Run，会花点数）：
 ① 先跑左边还没有图的素材（GPT Image 2）。不满意就改提示再跑，满意了再往下。
-② 再跑每一段影片（Seedance 2.0）。建议先跑第 1 段，看人物、声音对不对，再跑其余几段。
-③ 全部出片后，照 .md 里的「后制清单」剪：字幕、logo、转场、配乐都在后制加。
+② 再跑每一段影片（{model}）。建议先跑第 1 段，看人物、声音对不对，再跑其余几段。
+③ 有「字卡」格的段落：影片满意了，再跑右边的 Video Edit，把字卡加进画面。
+④ 全部出片后，照 .md 里的「后制清单」剪：字幕、logo、转场、配乐都在后制加。
 
 每一段的提示词在影片左边的文字格里，可以直接改。
 """
@@ -204,13 +217,13 @@ def build(plan, uploaded):
         if w:
             n["width"], n["height"], n["style"] = w, h, {"width": w, "height": h}
         nodes.append(n)
-        out_handle[i] = {"fileUpload": "output", "aiImage": "result"}.get(t)
+        out_handle[i] = {"fileUpload": "output", "aiImage": "result", "aiVideo": "result", "aiVideoEdit": "result"}.get(t)
 
     def edge(src, tgt, th):
         edges.append({"id": f"e_{src}_{tgt}_{th}", "source": src, "sourceHandle": out_handle.get(src),
                       "target": tgt, "targetHandle": th, "type": "deletable"})
 
-    node("note", "stickyNote", 0, -520, "使用说明", {"text": NOTE.format(title=plan["title"])}, 900, 420)
+    node("note", "stickyNote", 0, -520, "使用说明", {"text": NOTE.format(title=plan["title"], model=plan["model_name"])}, 900, 420)
 
     asset_node, y, image_inputs = {}, 0, []
     for k, a in plan["assets"].items():
@@ -246,9 +259,9 @@ def build(plan, uploaded):
         node(tid, "textInput", 1100, vy, f"第 {s['n']} 段 · 提示词", {"text": s["prompt"]})
         refs = sorted(s["refs"])
         node(vid, "aiVideo", 1560, vy, s["head"][:80], {
-            "model": VIDEO_MODEL, "generationType": "image-to-video" if s["first_frame"] else "text-to-video",
+            "model": plan["model"][0], "generationType": "image-to-video" if s["first_frame"] else "text-to-video",
             "aspectRatio": plan["ratio"], "resolution": "720p", "duration": str(s["duration"]),
-            "fixedLens": False, "generateAudio": True, "qualityMode": "fast", "multiShot": False,
+            "fixedLens": False, "generateAudio": True, "qualityMode": plan["model"][2], "multiShot": False,
             "shotCount": 1, "shotDurations": [s["duration"]],
             "refImageCount": 0 if s["first_frame"] else len(refs),
             "referenceVideoCount": 0, "referenceAudioCount": len(s["arefs"]), "elements": [],
@@ -261,6 +274,14 @@ def build(plan, uploaded):
         for n, k in sorted(s["arefs"]):
             if k in asset_node:
                 edge(asset_node[k], vid, f"ref-audio-{n}")
+        if s["edit"]:
+            etid, eid = f"seg{s['n']}_edit_txt", f"seg{s['n']}_edit"
+            node(etid, "textInput", 2020, vy, f"第 {s['n']} 段 · 字卡", {"text": s["edit"]})
+            node(eid, "aiVideoEdit", 2480, vy, f"第 {s['n']} 段 · 加字卡", {
+                "model": EDIT_MODEL, "duration": str(s["duration"]), "resolution": "720p", "aspectRatio": "auto",
+                "refImageCount": 0, "refAudioCount": 0, "status": "idle", "resultUrl": None})
+            edge(vid, eid, "source-video")
+            edge(etid, eid, "prompt")
     return nodes, edges
 
 
