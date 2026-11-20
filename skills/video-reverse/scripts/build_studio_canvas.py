@@ -16,6 +16,7 @@
     「## 四、素材清单」表格  — 每一行一个图 (图A、图B…) 或声音 (声A…)；「有了吗」那格写着 `素材/xxx.jpg` 就上传那个档
     「- **图B**：「…」」      — 没有档的图，用这段文字生成 (GPT Image 2)
     「- **图D**（输入：图L）：「…」」 — 拿别的图当输入来生成 (图生图)，提示里用 @image1、@image2 照输入的顺序叫它们
+    素材名称写「角色卡」或「（横）」出 16:9，「（竖）」出 9:16，「（3:4）」这类照写；其余跟影片同画幅
     「### 第 N 段 · … · 生成 N 秒 · …」+「接图：@image1 = 图A…」+「接声音：@audio1 = 声A」(可选) + 下面第一个代码块  — 每一段的影片节点
 """
 import json
@@ -32,6 +33,18 @@ VIDEO_MODEL = "seedance-2.0-custom"
 IMAGE_MODEL = "gpt-image-2"
 # 重搭时保留已跑出的结果；其余设定（提示、模式、接口数）用新的
 RESULT_FIELDS = ("status", "resultUrl", "resultUrls", "selectedResultIndex", "historyId", "runHistory", "resultText")
+
+
+def image_ratio(what, default):
+    """素材图的画幅：角色卡 / （横）→ 16:9，（竖）→ 9:16，（3:4）这类照写，其余跟影片一样。"""
+    m = re.search(r"[（(]\s*(\d+:\d+)\s*[）)]", what)
+    if m:
+        return m.group(1)
+    if "角色卡" in what or "（横）" in what:
+        return "16:9"
+    if "（竖）" in what:
+        return "9:16"
+    return default
 
 
 # ---------- 读 .md ----------
@@ -212,7 +225,7 @@ def build(plan, uploaded):
             ins = a.get("inputs") or []
             node(nid + "_txt", "textInput", 0, y, f"{k} · 生成提示", {"text": a["prompt"]})
             node(nid, "aiImage", 440, y, label, {"model": IMAGE_MODEL, "gptImage2Mode": "i2i" if ins else "t2i",
-                 "imageInputCount": len(ins), "aspectRatio": plan["ratio"], "resolution": "2K",
+                 "imageInputCount": len(ins), "aspectRatio": image_ratio(a["what"], plan["ratio"]), "resolution": "2K",
                  "gptImage2Quality": "high", "status": "idle"})
             edge(nid + "_txt", nid, "prompt")
             image_inputs.append((nid, ins))
