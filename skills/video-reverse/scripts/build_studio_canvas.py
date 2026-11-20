@@ -20,6 +20,7 @@
     「### 第 N 段 · … · 生成 N 秒 · …」+「接图：@image1 = 图A…」+「接声音：@audio1 = 声A」(可选) + 下面第一个代码块  — 每一段的影片节点
     「字卡（Video Edit）：」下一个代码块 (可选)  — 那一段出片后再接一个 studio Video Edit 格，照这段文字把字卡加进画面
     开头写一行「型号：Seedance 2.5」就用 2.5 (一段 4–30 秒)；没写用 Seedance 2.0 (4–15 秒)
+    同一行可以再写档位和画质，例如「型号：Seedance 2.5 · flash · 480p」(默认 720p)
 """
 import json
 import mimetypes
@@ -101,11 +102,15 @@ def parse(md_path):
             "edit": edit.group(1).strip() if edit else "",
         })
     mv = re.search(r"^型号[：:].*?(2\.5|2\.0)", text, re.M)
+    mline = re.search(r"^型号[：:].*$", text, re.M)
+    mres = re.search(r"(480p|720p|1080p)", mline.group(0)) if mline else None
+    mtier = re.search(r"\b(flash|fast|hd|pro)\b", mline.group(0), re.I) if mline else None
     return {
         "title": title.group(1).strip() if title else os.path.basename(md_path),
         "ratio": ratio.group(1) if ratio else "9:16",
         "assets": assets, "segments": segs, "base": base,
         "model": MODELS[mv.group(1) if mv else "2.0"], "model_name": "Seedance " + (mv.group(1) if mv else "2.0"),
+        "res": mres.group(1) if mres else "720p", "tier": mtier.group(1).lower() if mtier else None,
     }
 
 
@@ -260,8 +265,8 @@ def build(plan, uploaded):
         refs = sorted(s["refs"])
         node(vid, "aiVideo", 1560, vy, s["head"][:80], {
             "model": plan["model"][0], "generationType": "image-to-video" if s["first_frame"] else "text-to-video",
-            "aspectRatio": plan["ratio"], "resolution": "720p", "duration": str(s["duration"]),
-            "fixedLens": False, "generateAudio": True, "qualityMode": plan["model"][2], "multiShot": False,
+            "aspectRatio": plan["ratio"], "resolution": plan["res"], "duration": str(s["duration"]),
+            "fixedLens": False, "generateAudio": True, "qualityMode": plan["tier"] or plan["model"][2], "multiShot": False,
             "shotCount": 1, "shotDurations": [s["duration"]],
             "refImageCount": 0 if s["first_frame"] else len(refs),
             "referenceVideoCount": 0, "referenceAudioCount": len(s["arefs"]), "elements": [],
@@ -278,7 +283,7 @@ def build(plan, uploaded):
             etid, eid = f"seg{s['n']}_edit_txt", f"seg{s['n']}_edit"
             node(etid, "textInput", 2020, vy, f"第 {s['n']} 段 · 字卡", {"text": s["edit"]})
             node(eid, "aiVideoEdit", 2480, vy, f"第 {s['n']} 段 · 加字卡", {
-                "model": EDIT_MODEL, "duration": str(s["duration"]), "resolution": "720p", "aspectRatio": "auto",
+                "model": EDIT_MODEL, "duration": str(s["duration"]), "resolution": plan["res"], "aspectRatio": "auto",
                 "refImageCount": 0, "refAudioCount": 0, "status": "idle", "resultUrl": None})
             edge(vid, eid, "source-video")
             edge(etid, eid, "prompt")
