@@ -22,6 +22,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import clips as c  # noqa: E402
 
+NUM = re.compile(r"\b(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|percent)(?:-\w+)?\b|\d[\d,.]*%?", re.I)
 PUNCT = re.compile(r"[\s，。！？、；：,.!?;:「」『』“”\"'()（）…—\-~～]+")
 
 
@@ -32,11 +33,22 @@ def norm(s):
 def expected_lines(prompt):
     """从提示词「声音」那一块拿出每句台词和说话的人。"""
     lines = []
-    for m in re.finditer(r"^(?:[\d.]+\s*[–-]\s*[\d.]+\s*s?\s*)?(.{0,40}?)说[：:]\s*「(.+?)」", prompt, re.M):
+    for m in re.finditer(r"^(?:[\d.]+\s*[–-]\s*[\d.]+\s*s?\s*)?(.{0,60}?)说[：:]\s*「(.+?)」", prompt, re.M):
         raw, text = m.group(1).strip(), m.group(2).strip()
-        who = re.split(r"[（(用]", raw)[0].strip() or raw[:12]
+        raw = re.split(r"[。；]", raw)[-1]  # 「声音：街道环境声。画外音用…说」只留最后一句
+        who = re.split(r"[（(用在]", raw)[0].strip() or raw[:12]
         lines.append({"who": who, "text": text, "own_voice": "@audio" in raw})
+    # 画外音逐句列的写法：「1–4s：「…」」
+    for m in re.finditer(r"^[\d.]+\s*[–-]\s*[\d.]+\s*s?\s*[：:]\s*「(.+?)」\s*$", prompt, re.M):
+        lines.append({"who": "画外音", "text": m.group(1).strip(), "own_voice": "@audio" in prompt})
     return lines
+
+
+def language(lines):
+    """台词大多是英文字母就用英文听写，不然用中文。"""
+    s = "".join(ln["text"] for ln in lines)
+    latin = len(re.findall(r"[A-Za-z]", s))
+    return "en" if latin > len(re.sub(r"\s", "", s)) * 0.5 else "zh"
 
 
 def best_match(line, heard):
@@ -101,7 +113,7 @@ def main():
         report.append("- 要看：脸和发型有没有变、有没有多出眼镜或配件、衣服对不对、产品和 logo 有没有走样、多余手指、画面里有没有字")
 
         lines = expected_lines(s["prompt"])
-        heard = c.transcribe(src, os.path.join(out_dir, f".tmp{n}")) if lines else None
+        heard = c.transcribe(src, os.path.join(out_dir, f".tmp{n}"), language(lines)) if lines else None
         if lines and heard is None:
             report.append("- 台词：本机没有 whisper，没有听写。请自己听一遍，或装 whisper 后重跑（uv tool install openai-whisper）。")
         elif lines:
@@ -110,10 +122,18 @@ def main():
                        "| 台词（稿子） | 谁说 | 对得上 | 要注意 |", "|---|---|---|---|"]
             for ln in lines:
                 score = best_match(ln["text"], heard or "")
+                num_only = False
+                if score < 0.75 and NUM.search(ln["text"]):  # 听写把数字写成 2800、100%，跟稿子的拼法对不上
+                    s2 = best_match(NUM.sub(" ", ln["text"]), NUM.sub(" ", heard or ""))
+                    if s2 >= 0.75:
+                        score, num_only = s2, True
                 mark = "✅" if score >= 0.75 else ("⚠️" if score >= 0.5 else "❌")
                 notes = []
                 latin = re.findall(r"[A-Za-z][A-Za-z\-]+", ln["text"])
                 missing = [w for w in latin if w.lower().replace("-", "") not in (heard or "").lower().replace("-", "").replace(" ", "")]
+                missing = [w for w in missing if not NUM.fullmatch(w)]
+                if num_only:
+                    notes.append("数字被听写成阿拉伯数字，对稿时略过；听一下数字念得对不对")
                 if missing:
                     notes.append("英文 / 品牌名要人工听：" + "、".join(missing))
                 if score < 0.75:

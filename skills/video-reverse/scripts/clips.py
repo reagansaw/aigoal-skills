@@ -153,30 +153,31 @@ def _real_ggml_models():
     return out
 
 
-def transcribe(media, work_dir):
-    """有 whisper 就听写，回传文字；没有就回传 None。"""
+def transcribe(media, work_dir, lang="zh"):
+    """有 whisper 就听写，回传文字；没有就回传 None。lang：台词是中文给 "zh"，英文给 "en"。"""
     os.makedirs(work_dir, exist_ok=True)
     wav = os.path.join(work_dir, "audio.wav")
     r = run(["ffmpeg", "-v", "error", "-y", "-i", media, "-vn", "-ac", "1", "-ar", "16000", wav])
     if r.returncode != 0:
         return None
-    hint = "以下是普通话的句子，用简体中文。"  # 不给提示时常常出繁体，对稿时分数会被拉低
+    # 中文给提示，不然常出繁体；英文台词不能给中文提示，会被带偏成中文或别的语言
+    hint = "以下是普通话的句子，用简体中文。" if lang == "zh" else ""
     if shutil.which("whisper"):
         r = run(["whisper", wav, "--model", "small", "--output_format", "txt", "--output_dir", work_dir,
-                 "--initial_prompt", hint])
+                 "--language", lang] + (["--initial_prompt", hint] if hint else []))
         p = os.path.join(work_dir, "audio.txt")
         if r.returncode == 0 and os.path.exists(p):
             return open(p, encoding="utf-8").read().strip()
     if shutil.which("mlx_whisper"):
-        r = run(["mlx_whisper", wav, "--model", "mlx-community/whisper-small-mlx",
-                 "--output-format", "txt", "--output-dir", work_dir, "--initial-prompt", hint])
+        r = run(["mlx_whisper", wav, "--model", "mlx-community/whisper-small-mlx", "--language", lang,
+                 "--output-format", "txt", "--output-dir", work_dir] + (["--initial-prompt", hint] if hint else []))
         p = os.path.join(work_dir, "audio.txt")
         if r.returncode == 0 and os.path.exists(p):
             return open(p, encoding="utf-8").read().strip()
     models = _real_ggml_models()
     if shutil.which("whisper-cli") and models:
         base = os.path.join(work_dir, "audio")
-        r = run(["whisper-cli", "-m", models[-1], "-f", wav, "-l", "auto", "--prompt", hint, "-otxt", "-of", base])
+        r = run(["whisper-cli", "-m", models[-1], "-f", wav, "-l", lang, "-otxt", "-of", base] + (["--prompt", hint] if hint else []))
         if r.returncode == 0 and os.path.exists(base + ".txt"):
             return open(base + ".txt", encoding="utf-8").read().strip()
     return None
