@@ -1,0 +1,17 @@
+{
+  "name": "aigoal-skills",
+  "owner": {
+    "name": "AIGOAL"
+  },
+  "metadata": {
+    "description": "AIGOAL 学员用的 skills：照爆款做同款、落地页、WhatsApp 跟进讯息。"
+  },
+  "plugins": [
+    {
+      "name": "aigoal-skills",
+      "source": "./",
+      "description": "video-reverse（照爆款做同款，写 Seedance 提示词）、aigoal-landing（落地页）、aigoal-whatsapp（WhatsApp 跟进讯息）。",
+      "version": "0.1.0"
+    }
+  ]
+}
