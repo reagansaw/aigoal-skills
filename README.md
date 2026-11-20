@@ -45,7 +45,7 @@ AIGOAL 学员用的 Claude skills。装好之后，在 Claude 里打 `/` 选，�
 |---|---|---|---|
 | ffmpeg | video-reverse | `brew install ffmpeg` | `winget install Gyan.FFmpeg` |
 | Python 3 | video-reverse | `brew install python` | `winget install Python.Python.3.12` |
-| whisper（可选，听写台词） | video-reverse | `uv tool install openai-whisper` | `uv tool install openai-whisper` |
+| whisper（可选，听写台词、出片后对稿） | video-reverse | `uv tool install openai-whisper` | `uv tool install openai-whisper` |
 | yt-dlp（可选，下载链接） | video-reverse | `brew install yt-dlp` | `winget install yt-dlp.yt-dlp` |
 
 `aigoal-landing` 和 `aigoal-whatsapp` 不用装工具。
