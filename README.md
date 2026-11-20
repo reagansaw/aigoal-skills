@@ -5,6 +5,7 @@ AIGOAL 学员用的 Claude skills。装好之后，在 Claude 里打 `/` 选，�
 | skill | 做什么 | 怎么叫它 |
 |---|---|---|
 | `video-reverse` | 给一条爆款视频，逐镜头看懂，换成你的人物、产品、场景，写出可以直接贴进 Seedance 2.0 的分段提示词 | 「反推这条」「做同款」 |
+| `character-sheet` | 人物角色卡：一人一张 16:9 三格图（脸部特写 / 正面全身 / 背面全身），文字生成或用你的照片做，出片前先锁住脸和衣服 | 「做角色卡」「定妆」 |
 | `aigoal-landing` | 落地页：lead magnet（Opt-in + Thank you）或 webinar（报名 + VIP + 登记成功），换成你的品牌色，放进 app.aigoal.ai | 「帮我做领取页」「做 webinar 报名页」 |
 | `aigoal-whatsapp` | WhatsApp 讯息：活动前 7 条预热、webinar 报名后提醒、lead magnet 领取后跟进，附配图 | 「写预热讯息」「写报名后提醒」 |
 
@@ -56,4 +57,4 @@ AIGOAL 学员用的 Claude skills。装好之后，在 Claude 里打 `/` 选，�
 
 ## 版本
 
-0.1.0 · 2026-11-20
+0.2.0 · 2026-11-20
