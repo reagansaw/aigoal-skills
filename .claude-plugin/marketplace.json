@@ -4,13 +4,13 @@
     "name": "AIGOAL"
   },
   "metadata": {
-    "description": "AIGOAL 学员用的 skills：照爆款做同款、人物角色卡、落地页、排程发片、WhatsApp 跟进讯息。"
+    "description": "AIGOAL 学员用的 skills：照爆款做同款、泰式广告剧本、人物角色卡、落地页、排程发片、WhatsApp 跟进讯息。"
   },
   "plugins": [
     {
       "name": "aigoal-skills",
       "source": "./",
-      "description": "video-reverse（照爆款做同款，写 Seedance 提示词）、character-sheet（人物角色卡）、aigoal-landing（落地页）、aigoal-social（排程发片）、aigoal-whatsapp（WhatsApp 跟进讯息）。",
+      "description": "video-reverse（照爆款做同款，写 Seedance 提示词）、thai-ad（泰式搞笑广告剧本 + 画布）、character-sheet（人物角色卡）、aigoal-landing（落地页）、aigoal-social（排程发片）、aigoal-whatsapp（WhatsApp 跟进讯息）。",
       "version": "0.3.0"
     }
   ]
