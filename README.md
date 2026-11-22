@@ -5,6 +5,7 @@ AIGOAL 学员用的 Claude skills。装好之后，在 Claude 里打 `/` 选，�
 | skill | 做什么 | 怎么叫它 |
 |---|---|---|
 | `thai-ad` | 泰式搞笑广告：只要讲卖什么、品牌名、一个卖点，用逆向演绎法反推出 3 个点子，写成 30 秒剧本和 Seedance 2.5 分镜，直接搭好 studio 画布 | 「帮我想一支泰国广告」「写广告剧本」 |
+| `lead-magnet` | 想一个 lead magnet、当场做出来：讲行业和客人最常问什么，推荐 3 个不同形式的提案（清单、避坑、价钱表、对比表、必问问题、步骤图、自测、模板、体验券），选中的写成 PDF + 封面图，再接 `aigoal-landing` 做领取页。有 10 个行业的对照和马来西亚的写法 | 「帮我想 lead magnet」「送什么换名单」「做一份清单」 |
 | `hook` | 开头 3 秒的钩子：讲卖什么、给谁看，用「8 个按钮 × 一个具体细节」出 10 条不同路线的钩子，再写成 60 秒口播稿，或「一段正文配 3 个钩子」的广告测试组 | 「帮我想开头」「写口播稿」「广告钩子」 |
 | `video-reverse` | 给一条爆款视频，逐镜头看懂，换成你的人物、产品、场景，写出可以直接贴进 Seedance 2.0 的分段提示词 | 「反推这条」「做同款」 |
 | `character-sheet` | 人物角色卡：一人一张 16:9 三格图（脸部特写 / 正面全身 / 背面全身），文字生成或用你的照片做，出片前先锁住脸和衣服 | 「做角色卡」「定妆」 |
@@ -12,7 +13,7 @@ AIGOAL 学员用的 Claude skills。装好之后，在 Claude 里打 `/` 选，�
 | `aigoal-social` | 排程发片：把做好的片排到 FB 专页、IG、TikTok，一次排一个礼拜；查排程、取消、看观看数；设定留言关键字自动私讯 | 「这礼拜一三五晚上 8 点发」「帮我发到 FB IG」 |
 | `aigoal-whatsapp` | WhatsApp 讯息：活动前 7 条预热、webinar 报名后提醒、lead magnet 领取后跟进，附配图 | 「写预热讯息」「写报名后提醒」 |
 
-适合所有行业：卖产品、本地服务（美容、养生、汽车）、专业服务（房产、保险、融资）、课程教练都能用。`aigoal-landing` 和 `aigoal-whatsapp` 里有各行业怎么用的对照表；`video-reverse` 换的是你自己的人物、产品、场景，本来就不限行业；`thai-ad` 有 13 个行业例子；`hook` 问的是你自己生意的真细节，哪一行都能写。
+适合所有行业：卖产品、本地服务（美容、养生、汽车）、专业服务（房产、保险、融资）、课程教练都能用。`aigoal-landing` 和 `aigoal-whatsapp` 里有各行业怎么用的对照表；`video-reverse` 换的是你自己的人物、产品、场景，本来就不限行业；`thai-ad` 有 13 个行业例子；`lead-magnet` 有 10 个行业各自可以送什么；`hook` 问的是你自己生意的真细节，哪一行都能写。
 
 剪辑另外装 **video-craft**（口播剪出网感）：<https://github.com/reagansaw/jingjian>
 
@@ -54,10 +55,12 @@ AIGOAL 学员用的 Claude skills。装好之后，在 Claude 里打 `/` 选，�
 
 `hook`、`aigoal-landing`、`aigoal-whatsapp`、`aigoal-social` 不用装工具（`aigoal-social` 要 Python 3）。
 
+`lead-magnet` 出 PDF 要 Python 3，和电脑上有 Chrome、Edge 或 Brave 其中一个（没有也可以，改成自己用浏览器打印存 PDF）。
+
 ## studio 钥匙（可选）
 
 `video-reverse` 有 studio.aigoal.ai 的钥匙时，会拿最新的提示词指南，也能直接帮你搭 studio 画布；没有钥匙就用内置的离线版本。`thai-ad` 有钥匙才能直接搭画布，没有就只交分镜。钥匙设成环境变量 `AIGOAL_STUDIO_KEY`，**不要贴进任何档案**。
 
 ## 版本
 
-0.5.0 · 2026-11-21
+0.6.0 · 2026-11-22
