@@ -18,6 +18,8 @@
     「- **图D**（输入：图L）：「…」」 — 拿别的图当输入来生成 (图生图)，提示里用 @image1、@image2 照输入的顺序叫它们
     素材名称写「角色卡」或「（横）」出 16:9，「（竖）」出 9:16，「（3:4）」这类照写；其余跟影片同画幅
     「### 第 N 段 · … · 生成 N 秒 · …」+「接图：@image1 = 图A…」+「接声音：@audio1 = 声A」(可选) + 下面第一个代码块  — 每一段的影片节点
+    贴原片模式：素材清单多列「片A、片B…」(原片切出来的参考视频，`素材/原片-第1段.mp4`)，那一段写「接视频：@video1 = 片A」，
+        影片格就会接上 ref-video-1。一段只接一条参考视频。段标题里写「静音」= 这段不让模型出声音 (原声在粗剪时贴回)
     「字卡（Video Edit）：」下一个代码块 (可选)  — 那一段出片后再接一个 studio Video Edit 格，照这段文字把字卡加进画面
     开头写一行「型号：Seedance 2.5」就用 2.5 (一段 4–30 秒)；没写用 Seedance 2.0 (4–15 秒)
     同一行可以再写档位和画质，例如「型号：Seedance 2.5 · flash · 480p」(默认 720p)
@@ -67,10 +69,10 @@ def parse(md_path):
     if sec:
         for row in sec.group(1).splitlines():
             cells = [c.strip() for c in row.strip().strip("|").split("|")]
-            if len(cells) < 3 or not re.match(r"^(图[A-Z]|声[A-Z]|后制)$", cells[0]):
+            if len(cells) < 3 or not re.match(r"^(图[A-Z]|声[A-Z]|片[A-Z]|后制)$", cells[0]):
                 continue
             key, what, have = cells[0], cells[1], cells[2]
-            f = re.search(r"`([^`]+\.(?:jpg|jpeg|png|webp|mp3|wav|m4a))`", have, re.I)
+            f = re.search(r"`([^`]+\.(?:jpg|jpeg|png|webp|mp3|wav|m4a|mp4))`", have, re.I)
             path = os.path.join(base, f.group(1)) if f else None
             if key == "后制":
                 key = "后制" + str(sum(k.startswith("后制") for k in assets) + 1)
@@ -90,6 +92,7 @@ def parse(md_path):
         code = re.search(r"```[^\n]*\n(.*?)```", body, re.S)
         refs = re.findall(r"@image(\d+)\s*=\s*(图[A-Z])", body.split("```")[0])
         arefs = re.findall(r"@audio(\d+)\s*=\s*(声[A-Z])", body.split("```")[0])
+        vrefs = re.findall(r"@video(\d+)\s*=\s*(片[A-Z])", body.split("```")[0])
         first_frame = "首帧模式" in head
         edit = re.search(r"字卡（Video Edit）[^\n]*\n+```[^\n]*\n(.*?)```", body, re.S)
         segs.append({
@@ -98,6 +101,8 @@ def parse(md_path):
             "prompt": code.group(1).strip() if code else "",
             "refs": [(int(i), k) for i, k in refs],
             "arefs": [(int(i), k) for i, k in arefs],
+            "vrefs": [(int(i), k) for i, k in vrefs],
+            "mute": "静音" in head,
             "first_frame": first_frame,
             "edit": edit.group(1).strip() if edit else "",
         })
@@ -137,19 +142,53 @@ def check(plan):
         aused = set(int(x) for x in re.findall(r"@audio(\d+)", s["prompt"]))
         if aused - set(anums):
             problems.append(f"第 {s['n']} 段提示词用到 @audio{sorted(aused - set(anums))}，但「接声音」里没写")
-        for _, k in s["refs"] + s["arefs"]:
+        vnums = sorted(i for i, _ in s["vrefs"])
+        if len(vnums) > 1:
+            problems.append(f"第 {s['n']} 段接了 {len(vnums)} 条参考视频，一段只能接一条（@video1）")
+        elif vnums and vnums != [1]:
+            problems.append(f"第 {s['n']} 段的参考视频要叫 @video1")
+        vused = set(int(x) for x in re.findall(r"@video(\d+)", s["prompt"]))
+        if vused - set(vnums):
+            problems.append(f"第 {s['n']} 段提示词用到 @video{sorted(vused - set(vnums))}，但「接视频」里没写")
+        if vnums and not vused:
+            problems.append(f"第 {s['n']} 段接了参考视频，但提示词里没有提到 @video1")
+        if vnums and s["first_frame"]:
+            problems.append(f"第 {s['n']} 段是首帧模式，不能同时接参考视频；改成参考模式")
+        for _, k in s["vrefs"]:
+            a = plan["assets"].get(k)
+            if a and not a["file"]:
+                problems.append(f"{k} 没有档案：先用 cut_reference.py 切出来，路径写在素材清单「有了吗」那格")
+            elif a and os.path.isfile(a["file"]):
+                sec = video_seconds(a["file"])
+                if sec and not 2 <= sec <= 15.2:
+                    problems.append(f"{k} 长 {sec:.1f} 秒，参考视频一段要 2–15 秒")
+                if os.path.getsize(a["file"]) > 100e6:
+                    problems.append(f"{k} 超过 100MB，studio 收不了")
+        for _, k in s["refs"] + s["arefs"] + s["vrefs"]:
             a = plan["assets"].get(k)
             if not a:
                 problems.append(f"第 {s['n']} 段要接 {k}，素材清单里没有")
             elif a["file"] and not os.path.isfile(a["file"]):
                 problems.append(f"{k} 的档案不存在: {a['file']}")
     for k, a in plan["assets"].items():
+        if k.startswith("声") and not a["file"]:
+            problems.append(f"{k} 没有声音档：先在 studio 的 AI Voice 格用声音库生成一段 10–15 秒的样本（或请用户给一段真声 mp3），下载后路径写进素材清单「有了吗」那格")
         for src in a.get("inputs") or []:
             if src not in plan["assets"]:
                 problems.append(f"{k} 要用 {src} 当输入，素材清单里没有")
             elif src == k:
                 problems.append(f"{k} 不能拿自己当输入")
     return list(dict.fromkeys(problems))
+
+
+def video_seconds(path):
+    """参考视频几秒；没装 ffprobe 就不查。"""
+    try:
+        r = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", path],
+                           capture_output=True, text=True)
+        return float(r.stdout.strip())
+    except (OSError, ValueError):
+        return None
 
 
 # ---------- studio API ----------
@@ -236,7 +275,8 @@ def build(plan, uploaded):
         label = f"{k} · {a['what']}"[:60]
         if a["file"]:
             f = uploaded[a["file"]]
-            ftype = "audio" if a["file"].lower().endswith((".mp3", ".wav", ".m4a")) else "image"
+            low = a["file"].lower()
+            ftype = "audio" if low.endswith((".mp3", ".wav", ".m4a")) else ("video" if low.endswith(".mp4") else "image")
             node(nid, "fileUpload", 0, y, label, {**f["node_config"], "fileType": ftype,
                  "fileName": os.path.basename(a["file"]), "fileUrl": f["file_url"], "resultUrl": f["file_url"]})
         elif a["prompt"]:
@@ -248,8 +288,9 @@ def build(plan, uploaded):
             edge(nid + "_txt", nid, "prompt")
             image_inputs.append((nid, ins))
         else:
-            node(nid, "fileUpload", 0, y, f"{label}（请把图拖进来）",
-                 {"fileType": "image", "fileUrl": None, "resultUrl": None, "fileName": None})
+            is_audio = k.startswith("声")
+            node(nid, "fileUpload", 0, y, f"{label}（请把{'声音' if is_audio else '图'}拖进来）",
+                 {"fileType": "audio" if is_audio else "image", "fileUrl": None, "resultUrl": None, "fileName": None})
         asset_node[k] = nid
         y += 520
 
@@ -266,10 +307,10 @@ def build(plan, uploaded):
         node(vid, "aiVideo", 1560, vy, s["head"][:80], {
             "model": plan["model"][0], "generationType": "image-to-video" if s["first_frame"] else "text-to-video",
             "aspectRatio": plan["ratio"], "resolution": plan["res"], "duration": str(s["duration"]),
-            "fixedLens": False, "generateAudio": True, "qualityMode": plan["tier"] or plan["model"][2], "multiShot": False,
+            "fixedLens": False, "generateAudio": not s["mute"], "qualityMode": plan["tier"] or plan["model"][2], "multiShot": False,
             "shotCount": 1, "shotDurations": [s["duration"]],
             "refImageCount": 0 if s["first_frame"] else len(refs),
-            "referenceVideoCount": 0, "referenceAudioCount": len(s["arefs"]), "elements": [],
+            "referenceVideoCount": len(s["vrefs"]), "referenceAudioCount": len(s["arefs"]), "elements": [],
             "status": "idle", "resultUrl": None, "resultUrls": [], "selectedResultIndex": 0, "historyId": None,
         })
         edge(tid, vid, "prompt")
@@ -279,6 +320,9 @@ def build(plan, uploaded):
         for n, k in sorted(s["arefs"]):
             if k in asset_node:
                 edge(asset_node[k], vid, f"ref-audio-{n}")
+        for n, k in sorted(s["vrefs"]):
+            if k in asset_node:
+                edge(asset_node[k], vid, f"ref-video-{n}")
         if s["edit"]:
             etid, eid = f"seg{s['n']}_edit_txt", f"seg{s['n']}_edit"
             node(etid, "textInput", 2020, vy, f"第 {s['n']} 段 · 字卡", {"text": s["edit"]})
@@ -297,13 +341,15 @@ def main():
     md = os.path.abspath(os.path.expanduser(args[0]))
     plan = parse(md)
 
-    print(f"《{plan['title']}》 · {plan['ratio']}")
+    print(f"《{plan['title']}》 · {plan['ratio']} · {plan['model_name']} · 档位 {plan['tier'] or plan['model'][2]} · {plan['res']}")
     for k, a in plan["assets"].items():
         how = "上传 " + os.path.relpath(a["file"], plan["base"]) if a["file"] else (("GPT Image 2 生成" + (f"（输入 {'、'.join(a['inputs'])}）" if a.get("inputs") else "")) if a["prompt"] else "空格子，等你拖图")
         print(f"  {k}: {a['what'][:30]}  → {how}")
     for s in plan["segments"]:
-        refs = "，".join([f"@image{i}={k}" for i, k in sorted(s["refs"])] + [f"@audio{i}={k}" for i, k in sorted(s["arefs"])]) or "不接图"
-        print(f"  第 {s['n']} 段: {s['duration']} 秒 · {refs} · 提示词 {len(s['prompt'])} 字")
+        refs = "，".join([f"@image{i}={k}" for i, k in sorted(s["refs"])] + [f"@audio{i}={k}" for i, k in sorted(s["arefs"])] + [f"@video{i}={k}" for i, k in sorted(s["vrefs"])]) or "不接图"
+        print(f"  第 {s['n']} 段: {s['duration']} 秒 · {refs}{' · 静音' if s['mute'] else ''} · 提示词 {len(s['prompt'])} 字")
+    if any(s["vrefs"] for s in plan["segments"]):
+        print("  贴原片模式：接了参考视频的段，参考视频的秒数也算点数（参考秒数 + 生成秒数）。先只跑一段试。")
     problems = check(plan)
     if problems:
         print("\n有问题，先改 .md 再搭：")

@@ -5,6 +5,7 @@
     python3 assemble.py <反推结果.md>                     # 从 studio 画布拿每段选中的出片（要钥匙）
     python3 assemble.py <反推结果.md> --clips <文件夹>     # 用你自己下载好的出片（档名带段号：第1段.mp4）
     python3 assemble.py <反推结果.md> --trim 0.4           # 「头」「尾」剪掉几秒（默认 0.5）
+    python3 assemble.py <反推结果.md> --audio 素材/原片-原声.m4a   # 贴原片模式：整支粗剪换上原片的声音
 
 剪辑表写在反推结果的「六、后制清单」里（格式见 references/output-template.md）。
 没有剪辑表就照段号顺序接，每段剪掉头尾。
@@ -31,6 +32,7 @@ def main():
     ap.add_argument("--clips", help="出片所在的文件夹；不给就从 studio 画布下载")
     ap.add_argument("--trim", type=float, default=c.TRIM, help="「头」「尾」各剪掉几秒，默认 0.5")
     ap.add_argument("--out", help="输出档名，默认 <md 文件夹>/成片/粗剪.mp4")
+    ap.add_argument("--audio", help="贴原片模式：用这条声音（原片或 原片-原声.m4a）盖掉粗剪的声音")
     a = ap.parse_args()
 
     c.need_ffmpeg()
@@ -85,6 +87,26 @@ def main():
             sys.exit(f"接片时出错：\n{res.stderr[-800:]}")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+    if a.audio:
+        aud = os.path.abspath(os.path.expanduser(a.audio))
+        if not os.path.isfile(aud):
+            aud = os.path.join(plan["base"], a.audio)
+        if not os.path.isfile(aud) or not c.has_audio(aud):
+            sys.exit(f"找不到原声，或这个档没有声音：{a.audio}")
+        vlen, alen = c.duration(out), c.duration(aud)
+        mixed = out[:-4] + "-原声.mp4"
+        res = c.run(["ffmpeg", "-v", "error", "-y", "-i", out, "-i", aud, "-map", "0:v:0", "-map", "1:a:0",
+                     "-c:v", "copy", "-c:a", "aac", "-b:a", "160k", "-t", f"{min(vlen, alen):.3f}",
+                     "-movflags", "+faststart", mixed])
+        if res.returncode != 0:
+            sys.exit(f"贴原声时出错：\n{res.stderr[-800:]}")
+        print(f"\n贴了原声：{mixed}")
+        if abs(vlen - alen) > 0.5:
+            print(f"  画面 {vlen:.1f} 秒，原声 {alen:.1f} 秒，差 {abs(vlen - alen):.1f} 秒，已经照短的那边剪。"
+                  "声音和画面会慢慢对不上：回去看剪辑表，每段的长度要等于原片那一段的长度。")
+        else:
+            print("  画面和原声长度对得上。看一遍动作有没有跟着节拍。")
 
     print(f"\n粗剪：{out}（{c.duration(out):.1f} 秒）")
     orig = c.original_length(a.md)
